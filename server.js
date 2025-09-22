@@ -1,8 +1,10 @@
 import express from "express";
 import axios from "axios";
 import * as cheerio from "cheerio";
+import cors from "cors";
 
 const app = express();
+app.use(cors());
 const PORT = process.env.PORT || 3000;
 
 // Helper: parse price

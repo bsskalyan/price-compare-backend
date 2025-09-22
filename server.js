@@ -1,23 +1,18 @@
-const express = require("express");
-const cors = require("cors");
-const morgan = require("morgan");
-const rateLimit = require("express-rate-limit");
-const NodeCache = require("node-cache");
-const cheerio = require("cheerio");
-const puppeteer = require("puppeteer");
+import express from "express";
+import puppeteer from "puppeteer";
 
-const withTimeout = (p, ms = 15000, label = "task") =>
-  Promise.race([p, new Promise((_, r)=>setTimeout(()=>r(new Error(`${label} timed out`)), ms))]);
+const app = express();
+const PORT = process.env.PORT || 3000;
 
-const normalizeItem = (o)=>({
-  site: o.site, title: o.title||"", price: o.price ?? null, rating: o.rating ?? null,
-  url: o.url || "#", image: o.image || null, discount: o.discount ?? null
-});
-
-// ---- Flipkart scraper ----
+// Flipkart scraper function
 async function scrapeFlipkart(query) {
   const url = `https://www.flipkart.com/search?q=${encodeURIComponent(query)}`;
-  const browser = await puppeteer.launch({ headless: "new", args: ["--no-sandbox"] });
+
+  const browser = await puppeteer.launch({
+    headless: "new",
+    args: ["--no-sandbox", "--disable-setuid-sandbox"]
+  });
+
   const page = await browser.newPage();
   await page.goto(url, { waitUntil: "domcontentloaded" });
 
@@ -29,8 +24,16 @@ async function scrapeFlipkart(query) {
         const rating = card.querySelector("div._3LWZlK")?.innerText;
         const link = card.querySelector("a")?.href;
         const image = card.querySelector("img")?.src;
+
         if (title && price) {
-          return { site: "Flipkart", title, price, rating, url: "https://www.flipkart.com" + link, image };
+          return {
+            site: "Flipkart",
+            title,
+            price,
+            rating,
+            url: "https://www.flipkart.com" + link,
+            image
+          };
         }
       })
       .filter(Boolean)
@@ -40,65 +43,23 @@ async function scrapeFlipkart(query) {
   return items;
 }
 
-// ---- Stubs for other sites ----
-async function searchCroma(q){ return []; }
-async function searchReliance(q){ return []; }
-async function searchAmazon(q){ return []; }
-async function searchSnapdeal(q){ return []; }
-async function searchTataNeu(q){ return []; }
-async function searchNaaptol(q){ return []; }
-async function searchBigBasket(q){ return []; }
-async function searchDmart(q){ return []; }
-
-const app = express();
-app.use(cors());
-app.use(morgan("dev"));
-app.use("/api/", rateLimit({ windowMs: 60000, max: 20 }));
-
-const cache = new NodeCache({ stdTTL: 300 });
-
-app.get("/api/health", (_, res) => res.json({ ok: true }));
-
+// API route
 app.get("/api/search", async (req, res) => {
-  const q = (req.query.q || "").toString().trim();
-  if (!q) return res.status(400).json({ error: "Missing ?q" });
-
-  const cached = cache.get(q);
-  if (cached) return res.json({ query: q, items: cached, cached: true });
-
+  const query = req.query.q || "";
   try {
-    const results = await Promise.allSettled([
-      withTimeout(searchFlipkart(q), 15000, "flipkart"),
-      withTimeout(searchCroma(q), 15000, "croma"),
-      withTimeout(searchReliance(q), 15000, "reliance"),
-      withTimeout(searchAmazon(q), 15000, "amazon"),
-      withTimeout(searchSnapdeal(q), 15000, "snapdeal"),
-      withTimeout(searchTataNeu(q), 15000, "tataneu"),
-      withTimeout(searchNaaptol(q), 15000, "naaptol"),
-      withTimeout(searchBigBasket(q), 15000, "bigbasket"),
-      withTimeout(searchDmart(q), 15000, "dmart")
-    ]);
-    const items = results.flatMap(r => r.status === "fulfilled" ? r.value : []);
-    cache.set(q, items);
-    res.json({ query: q, items, cached: false });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
+    const items = await scrapeFlipkart(query);
+    res.json({ query, items, cached: false });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to scrape Flipkart" });
   }
 });
 
-app.get("/api/suggest", (req, res) => {
-  const q = (req.query.q||"").toString();
-  res.json({ query: q, alternatives: [`${q} 128GB`, `${q} pro`, `${q} refurbished`] });
+// Health check
+app.get("/api/health", (req, res) => {
+  res.json({ ok: true });
 });
 
-app.get("/api/smart-recommend", (req, res) => {
-  try {
-    const items = JSON.parse(req.query.items || "[]");
-    const good = items.filter(x => (x.rating || 0) >= 4);
-    const pick = (arr) => arr.sort((a,b)=>(a.price??Infinity)-(b.price??Infinity))[0] || null;
-    res.json({ pick: pick(good) || pick(items) || null });
-  } catch { res.json({ pick: null }); }
+app.listen(PORT, () => {
+  console.log(`✅ Server running on port ${PORT}`);
 });
-
-const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => console.log(`API running on port ${PORT}`));

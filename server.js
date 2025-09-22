@@ -15,34 +15,26 @@ const normalizeItem = (o)=>({
 });
 
 // ---- Flipkart scraper ----
-async function searchFlipkart(q, limit = 6) {
-  const browser = await puppeteer.launch({
-    headless: true,
-    args: ["--no-sandbox","--disable-setuid-sandbox"]
-  });
+async function scrapeFlipkart(query) {
+  const url = `https://www.flipkart.com/search?q=${encodeURIComponent(query)}`;
+  const browser = await puppeteer.launch({ headless: "new", args: ["--no-sandbox"] });
   const page = await browser.newPage();
-  await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
+  await page.goto(url, { waitUntil: "domcontentloaded" });
 
-  const url = `https://www.flipkart.com/search?q=${encodeURIComponent(q)}`;
-  await page.goto(url, { waitUntil: "domcontentloaded", timeout: 25000 });
-
-  const html = await page.content();
-  const $ = cheerio.load(html);
-  const items = [];
-
-  $("div[data-id]").slice(0, limit).each((_, el) => {
-    const title = $(el).find("a[title]").attr("title") || $(el).find("a").first().text().trim();
-    const priceText = $(el).find("div:contains(₹)").first().text().replace(/[^\d]/g, "");
-    const price = priceText ? Number(priceText) : null;
-    const ratingText = $(el).find("div[aria-label*='Ratings']").text().match(/[\d.]+/);
-    const rating = ratingText ? Number(ratingText[0]) : null;
-    const rel = $(el).find("a").first().attr("href") || "";
-    const link = rel ? new URL(rel, "https://www.flipkart.com").href : "#";
-    const img = $(el).find("img").attr("src") || $(el).find("img").attr("data-src");
-    const discount = ($(el).find("div:contains('% off')").first().text().match(/(\d+)%/)||[])[1] || null;
-
-    items.push(normalizeItem({ site:"Flipkart", title, price, rating, url: link, image: img, discount }));
-  });
+  const items = await page.evaluate(() =>
+    Array.from(document.querySelectorAll("div._1AtVbE"))
+      .map(card => {
+        const title = card.querySelector("a.s1Q9rs, a.IRpwTa, div._4rR01T")?.innerText;
+        const price = card.querySelector("div._30jeq3")?.innerText;
+        const rating = card.querySelector("div._3LWZlK")?.innerText;
+        const link = card.querySelector("a")?.href;
+        const image = card.querySelector("img")?.src;
+        if (title && price) {
+          return { site: "Flipkart", title, price, rating, url: "https://www.flipkart.com" + link, image };
+        }
+      })
+      .filter(Boolean)
+  );
 
   await browser.close();
   return items;

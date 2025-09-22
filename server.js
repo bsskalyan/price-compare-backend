@@ -7,47 +7,28 @@ const PORT = process.env.PORT || 3000;
 
 app.get("/api/search", async (req, res) => {
   const q = req.query.q || "";
-  const url = `https://www.flipkart.com/search?q=${encodeURIComponent(q)}`;
 
-  try {
-    const { data } = await axios.get(url, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36",
-      },
-    });
-
-    const $ = cheerio.load(data);
-    const items = [];
-
-    // Try multiple selectors
-    $("div._1AtVbE").each((_, el) => {
-      const title =
-        $(el).find("a.s1Q9rs").text() ||
-        $(el).find("a.IRpwTa").text() ||
-        $(el).find("div._4rR01T").text();
-      const price = $(el).find("div._30jeq3").first().text();
-      const rating = $(el).find("div._3LWZlK").first().text();
-      const link =
-        "https://www.flipkart.com" + ($(el).find("a").attr("href") || "");
-      const image = $(el).find("img").attr("src");
-
-      if (title && price) {
-        items.push({ site: "Flipkart", title, price, rating, link, image });
-      }
-    });
-
-    // If still no items, log HTML snippet for debugging
-    if (items.length === 0) {
-      console.log("⚠️ No items found. Dumping sample HTML:");
-      console.log($.html().slice(0, 2000)); // logs first 2000 chars
+  // Temporary dummy data (replace with real scraping later)
+  const items = [
+    {
+      site: "Flipkart",
+      title: "Apple iPhone 14 (Blue, 128 GB)",
+      price: "₹56,999",
+      rating: "4.6",
+      link: "https://www.flipkart.com/apple-iphone-14/p/itm...",
+      image: "https://rukminim2.flixcart.com/image/iphone14.jpg"
+    },
+    {
+      site: "Amazon",
+      title: "Apple iPhone 14 (Blue, 128 GB)",
+      price: "₹57,490",
+      rating: "4.5",
+      link: "https://www.amazon.in/dp/B0BDK62PDX",
+      image: "https://m.media-amazon.com/images/iphone14.jpg"
     }
+  ];
 
-    res.json({ query: q, items, cached: false });
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).json({ error: "Failed to scrape Flipkart" });
-  }
+  res.json({ query: q, items, cached: false });
 });
 
 app.get("/api/health", (req, res) => {

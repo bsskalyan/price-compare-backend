@@ -20,19 +20,28 @@ app.get("/api/search", async (req, res) => {
     const $ = cheerio.load(data);
     const items = [];
 
-    $("div[data-id]").slice(0, 5).each((_, el) => {
+    // Try multiple selectors
+    $("div._1AtVbE").each((_, el) => {
       const title =
-        $(el).find("a[title]").attr("title") ||
-        $(el).find("a").first().text().trim();
+        $(el).find("a.s1Q9rs").text() ||
+        $(el).find("a.IRpwTa").text() ||
+        $(el).find("div._4rR01T").text();
       const price = $(el).find("div._30jeq3").first().text();
       const rating = $(el).find("div._3LWZlK").first().text();
-      const link = "https://www.flipkart.com" + $(el).find("a").first().attr("href");
+      const link =
+        "https://www.flipkart.com" + ($(el).find("a").attr("href") || "");
       const image = $(el).find("img").attr("src");
 
       if (title && price) {
         items.push({ site: "Flipkart", title, price, rating, link, image });
       }
     });
+
+    // If still no items, log HTML snippet for debugging
+    if (items.length === 0) {
+      console.log("⚠️ No items found. Dumping sample HTML:");
+      console.log($.html().slice(0, 2000)); // logs first 2000 chars
+    }
 
     res.json({ query: q, items, cached: false });
   } catch (err) {

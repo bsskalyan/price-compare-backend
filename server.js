@@ -123,6 +123,11 @@ async function searchAmazon(query) {
         return { items: [], source: "blocked" };
       }
     }
+    console.error("Amazon error:", e.message);
+    if (e.response) {
+      console.error("Status:", e.response.status);
+      console.error("Body snippet:", e.response.data.slice(0, 300));
+    }
     return { items: [], source: "error" };
   }
 }

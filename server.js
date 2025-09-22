@@ -14,7 +14,7 @@ function parsePrice(text) {
   return num ? parseInt(num, 10) : null;
 }
 
-// Amazon mobile scraper
+// Amazon scraper
 async function scrapeAmazonMobile(query) {
   const url = `https://www.amazon.in/s?k=${encodeURIComponent(query)}`;
   const { data } = await axios.get(url, {
@@ -32,18 +32,29 @@ async function scrapeAmazonMobile(query) {
 
   $("div.s-result-item").each((i, el) => {
     const title = $(el).find("h2 span").text().trim();
+
     const priceTxt = $(el).find("span.a-price .a-offscreen").first().text().trim();
     const price = parsePrice(priceTxt);
+
     const link =
       "https://www.amazon.in" + ($(el).find("a.a-link-normal").attr("href") || "");
-    const image = $(el).find("img.s-image").attr("src");
+
+    // fix image grabbing (src, data-image-src, srcset fallback)
+    const image =
+      $(el).find("img.s-image").attr("src") ||
+      $(el).find("img.s-image").attr("data-image-src") ||
+      ($(el).find("img.s-image").attr("srcset") || "").split(" ")[0] ||
+      "https://via.placeholder.com/150?text=No+Image";
+
+    // grab ratings (Amazon uses span.a-icon-alt)
+    const rating = $(el).find("span.a-icon-alt").text().trim() || "No rating";
 
     if (title && price) {
-      items.push({ site: "Amazon", title, price: priceTxt, link, image });
+      items.push({ site: "Amazon", title, price: priceTxt, rating, link, image });
     }
   });
 
-  return items.slice(0, 5); // return top 5 results
+  return items.slice(0, 5); // top 5 results
 }
 
 // API route
@@ -52,13 +63,4 @@ app.get("/api/amazon", async (req, res) => {
   try {
     const items = await scrapeAmazonMobile(q);
     res.json({ query: q, items });
-  } catch (e) {
-    console.error("Amazon error:", e.message);
-    res.json({ query: q, items: [], error: e.message });
-  }
-});
-
-// Health check
-app.get("/api/health", (req, res) => res.json({ ok: true }));
-
-app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
+  } cat
